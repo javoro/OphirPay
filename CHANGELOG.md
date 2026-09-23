@@ -7,6 +7,9 @@ All notable changes to OphirPay will be documented in this file.
 ### Added
 - **Request-id + duration structured request logging**: every API request now emits a single structured log line with the request id, HTTP method, path, response status, and duration in ms. `withRequestLogging()` wraps every route handler (the proxy cannot observe a handler's final status/duration), the proxy threads the `X-Request-Id` it mints into the downstream request headers so handlers and error logs correlate with the response header, and `logger.request()`/`handleApiError()` now include the request id in their structured context. Rate-limited (429) rejections are logged from the proxy with the same request id.
 
+### Changed
+- **Merge-gate documentation now matches the workflows**: `CONTRIBUTING.md` described a 15-job CI/CD pipeline, but only four of those jobs exist as pull-request checks (`secrets-scan`, `typecheck`, `unit-tests`, `contract-wasm`) plus the two path-filtered workflows (`prisma-ci.yml`, `contract-regression.yml`). The table now lists what actually runs, each check's local command, and links the new [docs/MERGE_GATE.md](docs/MERGE_GATE.md), which maps every previously documented check to its real status and records that the `typos` job referenced by the DoD does not exist as a workflow.
+
 ## [Unreleased] — 2026-08-12 (submission hardening pass)
 
 ### Added
