@@ -31,27 +31,34 @@ Thank you for your interest in contributing! OphirPay is an open-source payment 
 
 Before adding or modifying an API endpoint, read the [API Endpoint Guide](docs/API_GUIDE.md). It documents the mandatory conventions: file structure, Zod validation, the error-handling pattern, auth middleware usage, the response envelope, rate-limit integration, a copy-pasteable worked example, and a pre-merge checklist.
 
-## 15-Job CI/CD Pipeline
+## CI/CD checks that run on a pull request
 
-Every PR triggers 15 independent CI/CD checks across quality, testing, security, and DevOps:
+The authoritative breakdown — every check, what it runs on, whether it gates a
+merge, and the command to reproduce it locally — lives in
+[docs/MERGE_GATE.md](docs/MERGE_GATE.md). Keep that document and the branch
+protection rule for `main` in step: a required check that is renamed or removed
+blocks every PR, and a check documented here but absent from the workflows
+blocks nothing.
 
-| # | Job | Runs on PR | Blocks merge |
-|---|---|---|---|
-| 1 | Lint — ESLint | ✅ | ✅ Required |
-| 2 | TypeCheck — tsc | ✅ | ✅ Required |
-| 3 | Unit Tests — Vitest | ✅ | ✅ Required |
-| 4 | Coverage — Vitest | ✅ | ⚠️ Informational |
-| 5 | Contract WASM Build | ✅ | ✅ Required |
-| 6 | Next.js Build | ✅ | ✅ Required |
-| 7 | E2E — Chromium | ✅ | ✅ Required |
-| 8 | E2E — Firefox | ✅ | ✅ Required |
-| 9 | Prisma Validate | ✅ | ✅ Required |
-| 10 | Docker Build | ✅ | ⚠️ Informational |
-| 11 | K8s Validate | ✅ | ✅ Required |
-| 12 | Helm Lint | ✅ | ✅ Required |
-| 13 | Secret Scan — Gitleaks | ✅ | ✅ Required |
-| 14 | npm Audit | ✅ | ⚠️ Advisory |
-| 15 | PR Auto-Label | ✅ | ℹ️ No block |
+| Check | Workflow / job | Runs on PR | Gates merge | Reproduce locally |
+|---|---|---|---|---|
+| Security — Secrets (Gitleaks) | `ci.yml / secrets-scan` | ✅ | ✅ | `gitleaks detect --config .gitleaks.toml --verbose --redact` |
+| Frontend — TypeCheck (tsc) | `ci.yml / typecheck` | ✅ | ✅ | `npx tsc --noEmit` |
+| Frontend — Unit Tests (Vitest) | `ci.yml / unit-tests` | ✅ | ✅ | `npx vitest run` |
+| Backend — Contracts (WASM + Tests) | `ci.yml / contract-wasm` | ✅ | ✅ | `cargo build --manifest-path ophirpay/Cargo.toml --target wasm32v1-none --release` |
+| Validate schema, replay migrations, test invariants | `prisma-ci.yml` | ✅ (only when `prisma/**` or the migration scripts change) | ✅ when it runs | `bash scripts/validate-prisma-migrations.sh` |
+| Contract regression | `contract-regression.yml` | ✅ (only when `contracts/**` changes) | ✅ when it runs | `node scripts/check-contract-regressions.mjs` |
+| PR labeler | `pr-labeler.yml` | ✅ | ℹ️ Never blocks | — |
+
+**Not currently a pull-request check**, despite being useful locally: lint
+(`npm run lint`), coverage (`npm run coverage`), the Next.js build
+(`npm run build`), E2E (`npm run test:e2e`), Docker build, K8s validation, Helm
+lint and the dependency audit (`npm run audit:deps`). The audit runs on a
+nightly schedule through `dependency-scan.yml` instead.
+
+**Scheduled only — never gates a merge:** `db-backup.yml`,
+`dependency-scan.yml`, `scheduled-payments-cron.yml`, `scorecard.yml`,
+`stale.yml`.
 
 ### Branch Protection Rules (recommended)
 
@@ -61,7 +68,8 @@ Configure these in **Settings → Branches → Branch protection rules** for `ma
 - **Require approvals**: 1 minimum
 - **Dismiss stale pull request approvals when new commits are pushed**: ✅
 - **Require status checks to pass before merging**: ✅
-  - Required checks: `lint`, `typecheck`, `unit-tests`, `contract-wasm`, `next-build`, `e2e-chromium`, `e2e-firefox`, `prisma-validate`, `k8s-validate`, `helm-lint`, `secret-scan`
+  - Required checks, as GitHub names them on the PR: `1️⃣2️⃣ Security — Secrets (Gitleaks)`, `2️⃣ Frontend — TypeCheck (tsc)`, `3️⃣ Frontend — Unit Tests (Vitest)`, `5️⃣ Backend — Contracts (WASM + Tests)`, and `Validate schema, replay migrations, and test invariants` (the last one only appears when the PR touches the Prisma paths)
+  - Confirm the list in **Settings → Branches → `main`**, not from this file
 - **Require conversation resolution before merging**: ✅
 - **Require signed commits**: Recommended
 - **Require linear history**: Recommended
@@ -69,7 +77,10 @@ Configure these in **Settings → Branches → Branch protection rules** for `ma
 
 ### Merge Requirements Summary
 
-> A PR must pass **11 of 15** checks (excludes coverage, npm audit, Docker build, PR labeler) and have at least **1 approving review** before it can be merged to `main`.
+> A PR must pass every check marked as required in **Settings → Branches**
+> (see [docs/MERGE_GATE.md](docs/MERGE_GATE.md) for the current list and each
+> check's local command) and have at least **1 approving review** before it can
+> be merged to `main`.
 
 ## Testing
 
@@ -210,7 +221,7 @@ are the contract for payout — the PR must satisfy them exactly.
 
 A PR is **done** — ready for review and merge — when **all** of the following
 hold. This mirrors the [pull request template](.github/pull_request_template.md)
-and the 11 required CI checks.
+and the required checks in [docs/MERGE_GATE.md](docs/MERGE_GATE.md).
 
 ### Functional & code requirements
 
@@ -238,7 +249,7 @@ and the 11 required CI checks.
 - [ ] Commands are copy-pasteable and were verified (or clearly marked as
   expectations)
 - [ ] New docs are linked from the README or the appropriate index page
-- [ ] No typos (`typos` spell-check CI job passes)
+- [ ] No typos (run `typos` with the repo's `.typos.toml`; there is no spell-check CI job yet)
 - [ ] Cross-links use relative paths so they work on GitHub and in the docs
 
 ### Checklist before opening the PR
@@ -248,7 +259,7 @@ and the 11 required CI checks.
 - [ ] `npm run ci` passes locally (typecheck → lint → test → build)
 - [ ] PR description explains **what** changed and **why**, references the
       issue with `Closes #…`, and includes a test plan
-- [ ] All 11 required CI checks are green on the PR
+- [ ] Every required check in [docs/MERGE_GATE.md](docs/MERGE_GATE.md) is green on the PR
 - [ ] At least 1 maintainer approval obtained before merge
 
 > If any box can't be ticked, say so explicitly in the PR description with the
